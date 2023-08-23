@@ -1,0 +1,7 @@
+server:
+  port: 8080
+
+
+ding-talk:
+  app-key: dingrbbhg7plnul8namp
+  app-secret: 4ReGK6uU8tZ1TZwQEOai5lXTLpZDeN2BJ-Wi6yJxNylxdJ4paTjfPjxnBEhI5SDE
