@@ -1,7 +1,9 @@
-package org.ashe.demo.controller;
+package org.ashe.demo.infra;
 
 import com.alibaba.fastjson.JSON;
 import com.aliyun.dingtalkcontact_1_0.models.GetUserHeaders;
+import com.aliyun.dingtalkcontact_1_0.models.GetUserResponse;
+import com.aliyun.dingtalkoauth2_1_0.Client;
 import com.aliyun.dingtalkoauth2_1_0.models.GetAccessTokenResponse;
 import com.aliyun.dingtalkoauth2_1_0.models.GetUserTokenRequest;
 import com.aliyun.dingtalkoauth2_1_0.models.GetUserTokenResponse;
@@ -15,21 +17,18 @@ import com.dingtalk.api.response.*;
 import com.taobao.api.ApiException;
 import com.taobao.api.internal.util.StringUtils;
 import lombok.extern.slf4j.Slf4j;
+import org.ashe.demo.controller.OverTimeDTO;
 import org.ashe.demo.dto.*;
-import org.ashe.demo.infra.DateUtil;
-import org.ashe.demo.infra.ServiceException;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.List;
 
-
-@RestController
+@Component
 @Slf4j
-@RequestMapping("/api/v1/auth")
-public class LoginController {
+public class DingClient {
 
     @Value("${ding-talk.app-key}")
     private String appKey;
@@ -40,27 +39,9 @@ public class LoginController {
     private static final String ZH_CH = "zh_CN";
 
     /**
-     * ding-talk oauth2.0 client
-     */
-    public static com.aliyun.dingtalkoauth2_1_0.Client authClient() {
-        Config config = new Config();
-        config.protocol = HTTPS;
-        config.regionId = CENTRAL;
-        try {
-            return new com.aliyun.dingtalkoauth2_1_0.Client(config);
-        } catch (Exception e) {
-            log.error(e.getMessage(), e);
-            throw new ServiceException(e);
-        }
-    }
-
-    /**
-     * 扫码登录
      * <a href="https://open.dingtalk.com/document/orgapp/tutorial-obtaining-user-personal-information#title-ts9-exq-xrh">api document</a>
      */
-    // 接口地址：http://127.0.0.1:8080/api/v1/auth/ding与钉钉登录与分享的回调域名地址一致
-    @GetMapping(value = "/ding")
-    public String scanLogin(@RequestParam(value = "authCode") String authCode) throws Exception {
+    public String scanLogin(String authCode) {
         com.aliyun.dingtalkoauth2_1_0.Client client = authClient();
         GetUserTokenRequest getUserTokenRequest = new GetUserTokenRequest()
 
@@ -71,7 +52,12 @@ public class LoginController {
                 .setClientSecret(appSecret)
                 .setCode(authCode)
                 .setGrantType("authorization_code");
-        GetUserTokenResponse getUserTokenResponse = client.getUserToken(getUserTokenRequest);
+        GetUserTokenResponse getUserTokenResponse;
+        try {
+            getUserTokenResponse = client.getUserToken(getUserTokenRequest);
+        } catch (Exception e) {
+            throw new ServiceException(e);
+        }
         // 获取用户个人token
         String accessToken = getUserTokenResponse.getBody().getAccessToken();
         log.info("accessToken:{}", accessToken);
@@ -79,10 +65,8 @@ public class LoginController {
     }
 
     /**
-     * 获取企业accessToken
      * <a href="https://open.dingtalk.com/document/orgapp/obtain-the-access_token-of-an-internal-app">api document</a>
      */
-    @GetMapping(value = "/accessToken")
     public String accessToken() {
         com.aliyun.dingtalkoauth2_1_0.Client client = authClient();
         com.aliyun.dingtalkoauth2_1_0.models.GetAccessTokenRequest getAccessTokenRequest = new com.aliyun.dingtalkoauth2_1_0.models.GetAccessTokenRequest()
@@ -108,13 +92,9 @@ public class LoginController {
     }
 
     /**
-     * 获取企业部门列表
      * <a href="https://open.dingtalk.com/document/orgapp/obtains-the-list-of-all-departments-of-an-enterprise">api document</a>
      */
-    @GetMapping("/department")
-    public String department(@RequestBody DeptDTO dto) {
-        // 企业accessToken
-        String accessToken = accessToken();
+    public String department(DeptDTO dto) {
         DingTalkClient client = new DefaultDingTalkClient("https://oapi.dingtalk.com/topapi/v2/department/listsub");
         OapiV2DepartmentListsubRequest req = new OapiV2DepartmentListsubRequest();
         req.setLanguage(ZH_CH);
@@ -125,7 +105,7 @@ public class LoginController {
             req.setDeptId(dto.getDeptId());
         }
         try {
-            OapiV2DepartmentListsubResponse rsp = client.execute(req, accessToken);
+            OapiV2DepartmentListsubResponse rsp = client.execute(req, accessToken());
             return JSON.toJSONString(rsp.getResult());
         } catch (ApiException e) {
             log.error(e.getMessage(), e);
@@ -134,13 +114,9 @@ public class LoginController {
     }
 
     /**
-     * 获取部门用户基础信息
      * <a href="https://open.dingtalk.com/document/orgapp/queries-the-simple-information-of-a-department-user">api document</a>
      */
-    @GetMapping("/department/user")
-    public String departmentUser(@RequestBody DeptDTO dto) {
-        // 企业accessToken
-        String accessToken = accessToken();
+    public String departmentUser(DeptDTO dto){
         DingTalkClient client = new DefaultDingTalkClient("https://oapi.dingtalk.com/topapi/user/listsimple");
         OapiUserListsimpleRequest req = new OapiUserListsimpleRequest();
         req.setDeptId(dto.getDeptId());
@@ -151,7 +127,7 @@ public class LoginController {
         req.setLanguage(ZH_CH);
         OapiUserListsimpleResponse rsp;
         try {
-            rsp = client.execute(req, accessToken);
+            rsp = client.execute(req, accessToken());
         } catch (ApiException e) {
             throw new ServiceException(e);
         }
@@ -159,11 +135,9 @@ public class LoginController {
     }
 
     /**
-     * 查询用户详情
      * <a href="https://open.dingtalk.com/document/orgapp/query-user-details">api document</a>
      */
-    @GetMapping("/user/info")
-    public String userInfo(@RequestBody UserDTO dto) {
+    public String userInfo(UserDTO dto) {
         DingTalkClient client = new DefaultDingTalkClient("https://oapi.dingtalk.com/topapi/v2/user/get");
         OapiV2UserGetRequest req = new OapiV2UserGetRequest();
         req.setUserid(dto.getUserId());
@@ -178,10 +152,8 @@ public class LoginController {
     }
 
     /**
-     * 创建日程
      * <a href="https://open.dingtalk.com/document/orgapp/create-event#">api document</a>
      */
-    @PostMapping("/create/event")
     public void createEvent(EventDTO dto) {
         com.aliyun.dingtalkcalendar_1_0.Client client = calendarClient();
         com.aliyun.dingtalkcalendar_1_0.models.CreateEventHeaders createEventHeaders = new com.aliyun.dingtalkcalendar_1_0.models.CreateEventHeaders();
@@ -223,11 +195,9 @@ public class LoginController {
     }
 
     /**
-     * 创建待办
      * <a href="https://open.dingtalk.com/document/orgapp/add-dingtalk-to-do-task#">api document</a>
      */
-    @PostMapping("/to-do-task")
-    public void createToDoTask(ToDoTaskDTO dto) {
+    public void createTodoTask(ToDoTaskDTO dto){
         com.aliyun.dingtalktodo_1_0.Client client = todoClient();
         com.aliyun.dingtalktodo_1_0.models.CreateTodoTaskHeaders createTodoTaskHeaders = new com.aliyun.dingtalktodo_1_0.models.CreateTodoTaskHeaders();
         createTodoTaskHeaders.xAcsDingtalkAccessToken = accessToken();
@@ -267,13 +237,9 @@ public class LoginController {
     }
 
     /**
-     * 获取报表假期数据
      * <a href="https://open.dingtalk.com/document/orgapp/obtains-the-holiday-data-from-the-smart-attendance-report">api document</a>
      */
-    @GetMapping("/vacation")
-    public String vacation(@RequestBody VacationDTO dto) {
-        // 参数校验 & 初始化
-        dto.init();
+    public String vacation(VacationDTO dto){
         DingTalkClient client = new DefaultDingTalkClient("https://oapi.dingtalk.com/topapi/attendance/getleavetimebynames");
         OapiAttendanceGetleavetimebynamesRequest req = new OapiAttendanceGetleavetimebynamesRequest();
         req.setUserid(dto.getUserId());
@@ -297,11 +263,9 @@ public class LoginController {
     }
 
     /**
-     * 获取加班时间
      * <a href="https://open.dingtalk.com/document/orgapp/queries-the-column-value-of-the-attendance-report">api document</a>
      */
-    @GetMapping("/overtime")
-    public String overtime(OverTimeDTO dto) {
+    public String overtime(OverTimeDTO dto){
         DingTalkClient client = new DefaultDingTalkClient("https://oapi.dingtalk.com/topapi/attendance/getcolumnval");
         OapiAttendanceGetcolumnvalRequest req = new OapiAttendanceGetcolumnvalRequest();
         req.setUserid(dto.getUserId());
@@ -326,11 +290,9 @@ public class LoginController {
     }
 
     /**
-     * 查询企业下用户待办列表
      * <a href="https://open.dingtalk.com/document/orgapp/get-the-user-s-to-do-items">api document</a>
      */
-    @GetMapping("/to-do")
-    public String todoList(UserDTO dto) {
+    public String todoList(UserDTO dto){
         DingTalkClient client = new DefaultDingTalkClient("https://oapi.dingtalk.com/topapi/workrecord/getbyuserid");
         OapiWorkrecordGetbyuseridRequest req = new OapiWorkrecordGetbyuseridRequest();
         req.setUserid(dto.getUserId());
@@ -346,23 +308,8 @@ public class LoginController {
         return JSON.toJSONString(rsp.getRecords());
     }
 
-    /**
-     * 获取用户个人信息
-     */
-    public String getUserinfo(String accessToken) throws Exception {
-        com.aliyun.dingtalkcontact_1_0.Client client = contactClient();
-        GetUserHeaders getUserHeaders = new GetUserHeaders();
-        getUserHeaders.xAcsDingtalkAccessToken = accessToken;
-        // 获取用户个人信息，如需获取当前授权人的信息，unionId参数必须传me
-        return JSON.toJSONString(client.getUserWithOptions("me", getUserHeaders, new RuntimeOptions()).getBody());
-    }
 
-    public static com.aliyun.dingtalkcontact_1_0.Client contactClient() throws Exception {
-        Config config = new Config();
-        config.protocol = HTTPS;
-        config.regionId = CENTRAL;
-        return new com.aliyun.dingtalkcontact_1_0.Client(config);
-    }
+
 
     public static com.aliyun.dingtalkcalendar_1_0.Client calendarClient() {
         com.aliyun.teaopenapi.models.Config config = new com.aliyun.teaopenapi.models.Config();
@@ -378,7 +325,7 @@ public class LoginController {
     public static com.aliyun.dingtalktodo_1_0.Client todoClient() {
         com.aliyun.teaopenapi.models.Config config = new com.aliyun.teaopenapi.models.Config();
         config.protocol = HTTPS;
-        config.regionId = HTTPS;
+        config.regionId = CENTRAL;
         try {
             return new com.aliyun.dingtalktodo_1_0.Client(config);
         } catch (Exception e) {
@@ -386,4 +333,48 @@ public class LoginController {
         }
     }
 
+    /**
+     * ding-talk oauth2.0 client
+     */
+    public static com.aliyun.dingtalkoauth2_1_0.Client authClient() {
+        Config config = new Config();
+        config.protocol = HTTPS;
+        config.regionId = CENTRAL;
+        try {
+            return new Client(config);
+        } catch (Exception e) {
+            throw new ServiceException(e);
+        }
+    }
+
+    /**
+     * 获取用户个人信息
+     */
+    public String getUserinfo(String accessToken) {
+        com.aliyun.dingtalkcontact_1_0.Client client = contactClient();
+        GetUserHeaders getUserHeaders = new GetUserHeaders();
+        getUserHeaders.xAcsDingtalkAccessToken = accessToken;
+        // 获取用户个人信息，如需获取当前授权人的信息，unionId参数必须传me
+        GetUserResponse rsp;
+        try {
+            rsp = client.getUserWithOptions("me", getUserHeaders, new RuntimeOptions());
+        } catch (Exception e) {
+            throw new ServiceException(e);
+        }
+        return JSON.toJSONString(rsp.getBody());
+    }
+
+    /**
+     * contactClient
+     */
+    public static com.aliyun.dingtalkcontact_1_0.Client contactClient() {
+        Config config = new Config();
+        config.protocol = HTTPS;
+        config.regionId = CENTRAL;
+        try {
+            return new com.aliyun.dingtalkcontact_1_0.Client(config);
+        } catch (Exception e) {
+            throw new ServiceException(e);
+        }
+    }
 }
