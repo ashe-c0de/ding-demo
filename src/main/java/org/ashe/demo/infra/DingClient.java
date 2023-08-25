@@ -26,6 +26,11 @@ import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.List;
 
+/**
+ * 钉钉接口客户端
+ * <a href="https://open.dingtalk.com/document/orgapp/learning-map">钉钉接口文档__检索</a>
+ * <a href="https://open-dev.dingtalk.com/fe/app#/corp/app">钉钉企业内部应用</a>
+ */
 @Component
 @Slf4j
 public class DingClient {
@@ -309,8 +314,9 @@ public class DingClient {
     }
 
 
-
-
+    /**
+     * calendarClient
+     */
     public static com.aliyun.dingtalkcalendar_1_0.Client calendarClient() {
         com.aliyun.teaopenapi.models.Config config = new com.aliyun.teaopenapi.models.Config();
         config.protocol = HTTPS;
@@ -322,6 +328,9 @@ public class DingClient {
         }
     }
 
+    /**
+     * todoClient
+     */
     public static com.aliyun.dingtalktodo_1_0.Client todoClient() {
         com.aliyun.teaopenapi.models.Config config = new com.aliyun.teaopenapi.models.Config();
         config.protocol = HTTPS;
