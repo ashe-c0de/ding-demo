@@ -10,25 +10,19 @@ import com.aliyun.teaopenapi.models.Config;
 import com.aliyun.teautil.models.RuntimeOptions;
 import com.dingtalk.api.DefaultDingTalkClient;
 import com.dingtalk.api.DingTalkClient;
-import com.dingtalk.api.request.OapiAttendanceGetleavetimebynamesRequest;
-import com.dingtalk.api.request.OapiUserListsimpleRequest;
-import com.dingtalk.api.request.OapiV2DepartmentListsubRequest;
-import com.dingtalk.api.request.OapiWorkrecordGetbyuseridRequest;
-import com.dingtalk.api.response.OapiAttendanceGetleavetimebynamesResponse;
-import com.dingtalk.api.response.OapiUserListsimpleResponse;
-import com.dingtalk.api.response.OapiV2DepartmentListsubResponse;
-import com.dingtalk.api.response.OapiWorkrecordGetbyuseridResponse;
+import com.dingtalk.api.request.*;
+import com.dingtalk.api.response.*;
 import com.taobao.api.ApiException;
 import com.taobao.api.internal.util.StringUtils;
 import lombok.extern.slf4j.Slf4j;
-import org.ashe.demo.dto.DeptDTO;
-import org.ashe.demo.dto.UserDTO;
-import org.ashe.demo.dto.VacationDTO;
+import org.ashe.demo.dto.*;
+import org.ashe.demo.infra.DateUtil;
 import org.ashe.demo.infra.ServiceException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.util.Arrays;
 import java.util.List;
 
 
@@ -43,6 +37,7 @@ public class LoginController {
     private String appSecret;
     private static final String HTTPS = "https";
     private static final String CENTRAL = "central";
+    private static final String ZH_CH = "zh_CN";
 
     /**
      * ding-talk oauth2.0 client
@@ -122,7 +117,7 @@ public class LoginController {
         String accessToken = accessToken();
         DingTalkClient client = new DefaultDingTalkClient("https://oapi.dingtalk.com/topapi/v2/department/listsub");
         OapiV2DepartmentListsubRequest req = new OapiV2DepartmentListsubRequest();
-        req.setLanguage("zh_CN");
+        req.setLanguage(ZH_CH);
         if (dto.getDeptId() == null) {
             // 获取企业通讯录根部门下的一级子部门信息
             req.setDeptId(1L);
@@ -143,7 +138,7 @@ public class LoginController {
      * <a href="https://open.dingtalk.com/document/orgapp/queries-the-simple-information-of-a-department-user">api document</a>
      */
     @GetMapping("/department/user")
-    public String departmentUser(@RequestBody DeptDTO dto){
+    public String departmentUser(@RequestBody DeptDTO dto) {
         // 企业accessToken
         String accessToken = accessToken();
         DingTalkClient client = new DefaultDingTalkClient("https://oapi.dingtalk.com/topapi/user/listsimple");
@@ -153,7 +148,7 @@ public class LoginController {
         req.setSize(10L);
         req.setOrderField("modify_desc");
         req.setContainAccessLimit(false);
-        req.setLanguage("zh_CN");
+        req.setLanguage(ZH_CH);
         OapiUserListsimpleResponse rsp;
         try {
             rsp = client.execute(req, accessToken);
@@ -164,11 +159,119 @@ public class LoginController {
     }
 
     /**
+     * 查询用户详情
+     * <a href="https://open.dingtalk.com/document/orgapp/query-user-details">api document</a>
+     */
+    @GetMapping("/user/info")
+    public String userInfo(@RequestBody UserDTO dto) {
+        DingTalkClient client = new DefaultDingTalkClient("https://oapi.dingtalk.com/topapi/v2/user/get");
+        OapiV2UserGetRequest req = new OapiV2UserGetRequest();
+        req.setUserid(dto.getUserId());
+        req.setLanguage(ZH_CH);
+        OapiV2UserGetResponse rsp;
+        try {
+            rsp = client.execute(req, accessToken());
+        } catch (ApiException e) {
+            throw new ServiceException(e);
+        }
+        return JSON.toJSONString(rsp.getResult());
+    }
+
+    /**
+     * 创建日程
+     * <a href="https://open.dingtalk.com/document/orgapp/create-event#">api document</a>
+     */
+    @PostMapping("/create/event")
+    public void createEvent(EventDTO dto) {
+        com.aliyun.dingtalkcalendar_1_0.Client client = calendarClient();
+        com.aliyun.dingtalkcalendar_1_0.models.CreateEventHeaders createEventHeaders = new com.aliyun.dingtalkcalendar_1_0.models.CreateEventHeaders();
+        createEventHeaders.xAcsDingtalkAccessToken = accessToken();
+        // 日程开始时间
+        com.aliyun.dingtalkcalendar_1_0.models.CreateEventRequest.CreateEventRequestStart start = new com.aliyun.dingtalkcalendar_1_0.models.CreateEventRequest.CreateEventRequestStart()
+                .setDateTime(dto.getStartTime())
+                .setTimeZone("Asia/Shanghai");
+        // 日程结束时间
+        com.aliyun.dingtalkcalendar_1_0.models.CreateEventRequest.CreateEventRequestEnd end = new com.aliyun.dingtalkcalendar_1_0.models.CreateEventRequest.CreateEventRequestEnd()
+                .setDateTime(dto.getEndTime())
+                .setTimeZone("Asia/Shanghai");
+        // 日程大于一天
+        if (!dto.getStartDate().equals(dto.getEndDate())) {
+            start.setDate(dto.getStartDate());
+            end.setDate(dto.getEndDate());
+        }
+        com.aliyun.dingtalkcalendar_1_0.models.CreateEventRequest createEventRequest = new com.aliyun.dingtalkcalendar_1_0.models.CreateEventRequest()
+                .setSummary(dto.getSummary())
+                .setStart(start)
+                .setDescription(dto.getDescription())
+                .setEnd(end);
+        try {
+            client.createEventWithOptions(dto.getUnionId(), "primary", createEventRequest, createEventHeaders, new com.aliyun.teautil.models.RuntimeOptions());
+        } catch (TeaException err) {
+            if (!com.aliyun.teautil.Common.empty(err.code) && !com.aliyun.teautil.Common.empty(err.message)) {
+                // err 中含有 code 和 message 属性，可帮助开发定位问题
+                log.error("fail", err);
+            }
+
+        } catch (Exception ex) {
+            TeaException err = new TeaException(ex.getMessage(), ex);
+            if (!com.aliyun.teautil.Common.empty(err.code) && !com.aliyun.teautil.Common.empty(err.message)) {
+                // err 中含有 code 和 message 属性，可帮助开发定位问题
+                log.error("fail", ex);
+            }
+
+        }
+    }
+
+    /**
+     * 创建待办
+     * <a href="https://open.dingtalk.com/document/orgapp/add-dingtalk-to-do-task#">api document</a>
+     */
+    @PostMapping("/to-do-task")
+    public void createToDoTask(ToDoTaskDTO dto) {
+        com.aliyun.dingtalktodo_1_0.Client client = todoClient();
+        com.aliyun.dingtalktodo_1_0.models.CreateTodoTaskHeaders createTodoTaskHeaders = new com.aliyun.dingtalktodo_1_0.models.CreateTodoTaskHeaders();
+        createTodoTaskHeaders.xAcsDingtalkAccessToken = accessToken();
+        com.aliyun.dingtalktodo_1_0.models.CreateTodoTaskRequest.CreateTodoTaskRequestNotifyConfigs notifyConfigs = new com.aliyun.dingtalktodo_1_0.models.CreateTodoTaskRequest.CreateTodoTaskRequestNotifyConfigs()
+                // 仅支持取值为1，表示应用内DING
+                .setDingNotify("1");
+        com.aliyun.dingtalktodo_1_0.models.CreateTodoTaskRequest createTodoTaskRequest = new com.aliyun.dingtalktodo_1_0.models.CreateTodoTaskRequest()
+                .setIsOnlyShowExecutor(dto.getIsOnlyShowExecutor())
+                .setSubject(dto.getSubject())
+                .setNotifyConfigs(notifyConfigs)
+                // 截止时间，Unix时间戳，单位毫秒
+                .setDueTime(DateUtil.getTimestampByOffSet(dto.getDueTime()))
+                .setCreatorId(dto.getCreatorId())
+                .setDescription(dto.getDescription())
+                .setPriority(dto.getPriority())
+                .setExecutorIds(
+                        Arrays.asList(
+                                dto.getExecutorIds().split(",")
+                        )
+                );
+        try {
+            client.createTodoTaskWithOptions(dto.getUnionId(), createTodoTaskRequest, createTodoTaskHeaders, new com.aliyun.teautil.models.RuntimeOptions());
+        } catch (TeaException err) {
+            if (!com.aliyun.teautil.Common.empty(err.code) && !com.aliyun.teautil.Common.empty(err.message)) {
+                // err 中含有 code 和 message 属性，可帮助开发定位问题
+                log.error("fail", err);
+            }
+
+        } catch (Exception ex) {
+            TeaException err = new TeaException(ex.getMessage(), ex);
+            if (!com.aliyun.teautil.Common.empty(err.code) && !com.aliyun.teautil.Common.empty(err.message)) {
+                // err 中含有 code 和 message 属性，可帮助开发定位问题
+                log.error("fail", ex);
+            }
+
+        }
+    }
+
+    /**
      * 获取报表假期数据
      * <a href="https://open.dingtalk.com/document/orgapp/obtains-the-holiday-data-from-the-smart-attendance-report">api document</a>
      */
     @GetMapping("/vacation")
-    public String vacation(@RequestBody VacationDTO dto){
+    public String vacation(@RequestBody VacationDTO dto) {
         // 参数校验 & 初始化
         dto.init();
         DingTalkClient client = new DefaultDingTalkClient("https://oapi.dingtalk.com/topapi/attendance/getleavetimebynames");
@@ -188,10 +291,38 @@ public class LoginController {
         log.info("columnVo:{}", JSON.toJSONString(result.getColumns().get(0).getColumnvo()));
         // 累加请假时长不为零的数据
         BigDecimal vacationHour = list.stream()
-                .filter(item -> !"0.0".equals(item.getValue()))
                 .map(item -> new BigDecimal(item.getValue()))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         return vacationHour.toString();
+    }
+
+    /**
+     * 获取加班时间
+     * <a href="https://open.dingtalk.com/document/orgapp/queries-the-column-value-of-the-attendance-report">api document</a>
+     */
+    @GetMapping("/overtime")
+    public String overtime(OverTimeDTO dto) {
+        DingTalkClient client = new DefaultDingTalkClient("https://oapi.dingtalk.com/topapi/attendance/getcolumnval");
+        OapiAttendanceGetcolumnvalRequest req = new OapiAttendanceGetcolumnvalRequest();
+        req.setUserid(dto.getUserId());
+        req.setColumnIdList(dto.getColumnIdList());
+        // 默认计算当前月份
+        req.setFromDate(StringUtils.parseDateTime(DateUtil.getFirstDayOfMonth()));
+        req.setToDate(StringUtils.parseDateTime(DateUtil.getLastDayOfMonth()));
+        OapiAttendanceGetcolumnvalResponse rsp;
+        try {
+            rsp = client.execute(req, accessToken());
+        } catch (ApiException e) {
+            throw new ServiceException(e);
+        }
+        OapiAttendanceGetcolumnvalResponse.ColumnForTopVo columnVo = rsp.getResult().getColumnVals().get(0).getColumnVo();
+        log.info("columnVo:{}", JSON.toJSONString(columnVo));
+        List<OapiAttendanceGetcolumnvalResponse.ColumnDayAndVal> list = rsp.getResult().getColumnVals().get(0).getColumnVals();
+        // 累加加班时间
+        BigDecimal overTime = list.stream()
+                .map(e -> new BigDecimal(e.getValue()))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return JSON.toJSONString(overTime.toString());
     }
 
     /**
@@ -199,7 +330,7 @@ public class LoginController {
      * <a href="https://open.dingtalk.com/document/orgapp/get-the-user-s-to-do-items">api document</a>
      */
     @GetMapping("/to-do")
-    public String todoList(UserDTO dto){
+    public String todoList(UserDTO dto) {
         DingTalkClient client = new DefaultDingTalkClient("https://oapi.dingtalk.com/topapi/workrecord/getbyuserid");
         OapiWorkrecordGetbyuseridRequest req = new OapiWorkrecordGetbyuseridRequest();
         req.setUserid(dto.getUserId());
@@ -231,6 +362,28 @@ public class LoginController {
         config.protocol = HTTPS;
         config.regionId = CENTRAL;
         return new com.aliyun.dingtalkcontact_1_0.Client(config);
+    }
+
+    public static com.aliyun.dingtalkcalendar_1_0.Client calendarClient() {
+        com.aliyun.teaopenapi.models.Config config = new com.aliyun.teaopenapi.models.Config();
+        config.protocol = HTTPS;
+        config.regionId = CENTRAL;
+        try {
+            return new com.aliyun.dingtalkcalendar_1_0.Client(config);
+        } catch (Exception e) {
+            throw new ServiceException(e);
+        }
+    }
+
+    public static com.aliyun.dingtalktodo_1_0.Client todoClient() {
+        com.aliyun.teaopenapi.models.Config config = new com.aliyun.teaopenapi.models.Config();
+        config.protocol = HTTPS;
+        config.regionId = HTTPS;
+        try {
+            return new com.aliyun.dingtalktodo_1_0.Client(config);
+        } catch (Exception e) {
+            throw new ServiceException(e);
+        }
     }
 
 }
