@@ -24,14 +24,6 @@ public class DingController {
     }
 
     /**
-     * 获取企业accessToken
-     */
-    @GetMapping(value = "/accessToken")
-    public String accessToken() {
-        return dingService.getAccessToken();
-    }
-
-    /**
      * 获取企业部门列表
      */
     @GetMapping("/department")

@@ -14,11 +14,6 @@ public class DingService {
 
     private final DingClient dingClient;
 
-
-    public String getAccessToken() {
-        return dingClient.accessToken();
-    }
-
     public String getDepartment(DeptDTO dto) {
         return dingClient.department(dto);
     }

@@ -72,7 +72,7 @@ public class DingClient {
     /**
      * <a href="https://open.dingtalk.com/document/orgapp/obtain-the-access_token-of-an-internal-app">api document</a>
      */
-    public String accessToken() {
+    private String accessToken() {
         com.aliyun.dingtalkoauth2_1_0.Client client = authClient();
         com.aliyun.dingtalkoauth2_1_0.models.GetAccessTokenRequest getAccessTokenRequest = new com.aliyun.dingtalkoauth2_1_0.models.GetAccessTokenRequest()
                 .setAppKey(appKey)
