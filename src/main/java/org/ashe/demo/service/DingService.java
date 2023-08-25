@@ -35,7 +35,7 @@ public class DingService {
         dingClient.createEvent(dto);
     }
 
-    public void createTodoTask(ToDoTaskDTO dto) {
+    public void createTodoTask(TodoTaskDTO dto) {
         dingClient.createTodoTask(dto);
     }
 

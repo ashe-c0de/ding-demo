@@ -197,7 +197,7 @@ public class DingClient {
     /**
      * <a href="https://open.dingtalk.com/document/orgapp/add-dingtalk-to-do-task#">api document</a>
      */
-    public void createTodoTask(ToDoTaskDTO dto){
+    public void createTodoTask(TodoTaskDTO dto){
         com.aliyun.dingtalktodo_1_0.Client client = todoClient();
         com.aliyun.dingtalktodo_1_0.models.CreateTodoTaskHeaders createTodoTaskHeaders = new com.aliyun.dingtalktodo_1_0.models.CreateTodoTaskHeaders();
         createTodoTaskHeaders.xAcsDingtalkAccessToken = accessToken();

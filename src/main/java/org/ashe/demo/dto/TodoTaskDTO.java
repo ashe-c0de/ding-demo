@@ -5,7 +5,7 @@ import lombok.Setter;
 
 @Getter
 @Setter
-public class ToDoTaskDTO {
+public class TodoTaskDTO {
 
     /**
      * 待办标题

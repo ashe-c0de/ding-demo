@@ -67,7 +67,7 @@ public class DingController {
      * 创建待办
      */
     @PostMapping("/todo-task")
-    public void createTodoTask(ToDoTaskDTO dto) {
+    public void createTodoTask(TodoTaskDTO dto) {
         dingService.createTodoTask(dto);
     }
 
